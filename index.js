@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { client, MAX_RETRIES, RETRY_DELAY } from './config/clients.js';
-import { sendDiscordError, sendSlackError } from './utils/errorHandlers.js';
+import { sendDiscordError, sendSlackError, notifyError } from './utils/errorHandlers.js';
 import { createMiscRecord, findCampaign, findCreatorRecord, findCurrentWeekKPI, findCurrentMonthKPI, createParasitionGroupRecord } from './services/airtable/index.js';
 import { getTikTokData, sendToAIMessage } from './services/external.js';
 import { scheduleVideoUpdates } from './services/scheduler.js';
@@ -27,8 +27,11 @@ async function processMessage(messageData, retryCount = 0) {
     if (!data.valid) {
       console.log(data);
       console.log('Invalid Message, Please check again');
+      await notifyError(
+        messageData.channelId, 
+        `Invalid message format from ${messageData.author}: ${data.reason}`
+      );
       await sendDiscordError(messageData.channelId, `@${messageData.author} ${data.reason}`);
-      await sendSlackError(`Invalid message format: ${data.reason}`);
       return false;
     }
 
@@ -36,7 +39,10 @@ async function processMessage(messageData, retryCount = 0) {
 
     const miscRecordCreated = await createMiscRecord(data, messageData);
     if (!miscRecordCreated) {
-      await sendSlackError('Could not create misc record');
+      await notifyError(
+        messageData.channelId,
+        `Failed to create misc record for message from ${messageData.author}`
+      );
       return false;
     }
 
@@ -50,10 +56,14 @@ async function processMessage(messageData, retryCount = 0) {
 
     let tiktokData;
     try {
-      tiktokData = await getTikTokData(data.tiktok_url);
+      // Pass the channelId to getTikTokData for proper error reporting
+      tiktokData = await getTikTokData(data.tiktok_url, messageData.channelId);
       console.log('TikTok data retrieved successfully:', tiktokData.itemInfo.itemStruct.author);
     } catch (error) {
-      await sendSlackError(`TikTok data fetch failed: ${error.message}`);
+      await notifyError(
+        messageData.channelId,
+        `TikTok data fetch failed for ${data.tiktok_url} from ${messageData.author}: ${error.message}`
+      );
       return false;
     }
 
@@ -66,13 +76,19 @@ async function processMessage(messageData, retryCount = 0) {
     const monthlyKPI = await findCurrentMonthKPI();
 
     if (!weeklyKPI || !monthlyKPI) {
-      await sendSlackError('Could not find current KPI records');
+      await notifyError(
+        messageData.channelId,
+        `Could not find current KPI records for message from ${messageData.author}`
+      );
       return false;
     }
 
     const parasitionRecord = await createParasitionGroupRecord(data, creatorRecord, campaign, tiktokData, messageData, weeklyKPI, monthlyKPI);
     if (!parasitionRecord) {
-      await sendSlackError('Failed to create parasition group record');
+      await notifyError(
+        messageData.channelId,
+        `Failed to create parasition group record for message from ${messageData.author}`
+      );
       return false;
     }
 
@@ -81,13 +97,22 @@ async function processMessage(messageData, retryCount = 0) {
   } catch (error) {
     console.error(`Message processing attempt ${retryCount + 1} failed:`, error);
 
+    // Notify about the error to both platforms
+    await notifyError(
+      messageData.channelId,
+      `Failed to process message from ${messageData.author} (attempt ${retryCount + 1}): ${error.message}`
+    );
+
     if (retryCount < MAX_RETRIES) {
       console.log(`Retrying in ${RETRY_DELAY}ms...`);
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
       return processMessage(messageData, retryCount + 1);
     } else {
       console.error('Max retries reached. Giving up.');
-      await sendSlackError(`Failed to process message after ${MAX_RETRIES} attempts: ${error.message}`);
+      await notifyError(
+        messageData.channelId,
+        `Failed to process message from ${messageData.author} after ${MAX_RETRIES} attempts: ${error.message}`
+      );
       return false;
     }
   }
@@ -122,6 +147,7 @@ client.on("messageCreate", async (message) => {
   const success = await processMessage(messageData);
   if (!success) {
     console.error(`Failed to process message ${messageData.id} after all retries`);
+    // Final notification is already sent in processMessage
   }
 });
 

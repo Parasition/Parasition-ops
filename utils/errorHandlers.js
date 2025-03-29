@@ -65,9 +65,26 @@ async function sendSlackWarning(message) {
   }
 }
 
+// New function to send notifications to both platforms
+async function notifyError(channelId, errorMessage, includeSlack = true) {
+  // Always log to console
+  console.error(`❌ Error: ${errorMessage}`);
+  
+  // Send to Discord if channelId is provided
+  if (channelId) {
+    await sendDiscordError(channelId, errorMessage);
+  }
+  
+  // Send to Slack unless specifically disabled
+  if (includeSlack) {
+    await sendSlackError(errorMessage);
+  }
+}
+
 export {
   sendDiscordError,
   sendSlackError,
   sendSlackSuccess,
-  sendSlackWarning
+  sendSlackWarning,
+  notifyError
 };

@@ -2,7 +2,7 @@
 import cron from 'node-cron';
 import { base } from '../config/clients.js';
 import { getTikTokData } from './external.js';
-import { sendSlackError, sendSlackSuccess, sendSlackWarning } from '../utils/errorHandlers.js';
+import { sendSlackError, sendSlackSuccess, sendSlackWarning, notifyError } from '../utils/errorHandlers.js';
 
 async function processVideo(record, index, totalRecords) {
   const videoUrl = record.fields.Video;
@@ -134,6 +134,7 @@ const scheduleVideoUpdates = () => {
   // Execute immediately when script starts
   updateVideoViews().catch(error => {
     console.error('Failed to execute initial video update:', error);
+    sendSlackError(`Failed to execute initial video update: ${error.message}`);
   });
 
   // Schedule to run at midnight (00:00) every day
@@ -143,6 +144,7 @@ const scheduleVideoUpdates = () => {
       await updateVideoViews();
     } catch (error) {
       console.error('Failed to execute scheduled video update:', error);
+      sendSlackError(`Failed to execute scheduled video update: ${error.message}`);
     }
   }, {
     timezone: "UTC"

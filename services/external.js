@@ -1,12 +1,18 @@
 
 import fetch from 'node-fetch';
-import { sendSlackError, sendSlackWarning } from '../utils/errorHandlers.js';
+import { sendSlackError, sendSlackWarning, notifyError } from '../utils/errorHandlers.js';
 
 const cache = new Map();
 const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
-async function getTikTokData(videoUrl) {
+async function getTikTokData(videoUrl, channelId = null) {
   console.log('Processing TikTok URL:', videoUrl);
+  
+  if (!videoUrl) {
+    const error = 'Missing TikTok URL';
+    await notifyError(channelId, error);
+    throw new Error(error);
+  }
   
   // Check cache first
   const cachedData = cache.get(videoUrl);
@@ -32,10 +38,18 @@ async function getTikTokData(videoUrl) {
       });
 
       if (response.status === 403 || errorData.includes('Video not found')) {
-        throw new Error('Video is deleted');
+        const error = 'Video is deleted';
+        // Only notify if channelId is provided (user submission context)
+        if (channelId) {
+          await notifyError(channelId, `${error}: ${videoUrl}`);
+        } else {
+          await sendSlackWarning(`${error}: ${videoUrl}`);
+        }
+        throw new Error(error);
       }
 
-      await sendSlackError(`TikTok API error: ${response.status} - ${errorData}`);
+      const errorMessage = `TikTok API error: ${response.status} - ${errorData}`;
+      await notifyError(channelId, errorMessage);
       throw new Error(`TikTok API error: ${response.status}`);
     }
 
@@ -50,10 +64,13 @@ async function getTikTokData(videoUrl) {
     return data;
   } catch (error) {
     console.error('Error fetching TikTok data:', error);
+    
     if (error.message === 'Video is deleted') {
       throw error;
     }
-    await sendSlackError(`TikTok API fetch error: ${error.message}`);
+    
+    // Forward the channelId if provided (from user submission context)
+    await notifyError(channelId, `TikTok API fetch error for ${videoUrl}: ${error.message}`);
     throw error;
   }
 }
@@ -73,14 +90,15 @@ async function sendToAIMessage(messageData, retryCount = 0) {
 
     if (!response.ok) {
       const res = await response.json();
-      const error = `HTTP error! status: ${response.status}`;
-      await sendSlackError(error);
-      throw new Error(error);
+      const errorMessage = `AI message processing error: HTTP status ${response.status}`;
+      await notifyError(messageData.channelId, errorMessage);
+      throw new Error(errorMessage);
     }
 
     return await response.json();
   } catch (error) {
-    await sendSlackError(`AI Message error: ${error.message}`);
+    const errorMessage = `AI Message processing error for message from ${messageData.author}: ${error.message}`;
+    await notifyError(messageData.channelId, errorMessage);
     throw error;
   }
 }
