@@ -1,4 +1,3 @@
-
 import { client, slack } from '../config/clients.js';
 
 async function sendDiscordError(channelId, error) {
@@ -10,7 +9,7 @@ async function sendDiscordError(channelId, error) {
 
     const channel = await client.channels.fetch(channelId);
     if (channel) {
-      await channel.send(`❌ Error: ${error}`);
+      await channel.send(`❌ ${error}`);
     }
   } catch (err) {
     console.error('Failed to send error message to Discord:', err);
@@ -65,20 +64,15 @@ async function sendSlackWarning(message) {
   }
 }
 
-// New function to send notifications to both platforms
-async function notifyError(channelId, errorMessage, includeSlack = true) {
-  // Always log to console
-  console.error(`❌ Error: ${errorMessage}`);
+async function notifyError(channelId, technicalError, userFriendlyMessage) {
+  console.error(`❌ Error: ${technicalError}`);
   
-  // Send to Discord if channelId is provided
   if (channelId) {
-    await sendDiscordError(channelId, errorMessage);
+    const discordMessage = userFriendlyMessage || technicalError;
+    await sendDiscordError(channelId, discordMessage);
   }
   
-  // Send to Slack unless specifically disabled
-  if (includeSlack) {
-    await sendSlackError(errorMessage);
-  }
+  await sendSlackError(technicalError);
 }
 
 export {

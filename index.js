@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 import express from 'express';
 import { client, MAX_RETRIES, RETRY_DELAY } from './config/clients.js';
@@ -27,11 +26,23 @@ async function processMessage(messageData, retryCount = 0) {
     if (!data.valid) {
       console.log(data);
       console.log('Invalid Message, Please check again');
+      
+      // User-friendly error based on the specific reason
+      let userMessage = "Your message format isn't quite right. ";
+      
+      if (data.reason.includes("URL")) {
+        userMessage += "Please make sure you've included a valid TikTok URL.";
+      } else if (data.reason.includes("boost") || data.reason.includes("code")) {
+        userMessage += "Please include the correct campaign or boost code.";
+      } else {
+        userMessage += "Please check your message and try again.";
+      }
+      
       await notifyError(
         messageData.channelId, 
-        `Invalid message format from ${messageData.author}: ${data.reason}`
+        `Invalid message format from ${messageData.author}: ${data.reason}`,
+        userMessage
       );
-      await sendDiscordError(messageData.channelId, `@${messageData.author} ${data.reason}`);
       return false;
     }
 
@@ -97,10 +108,17 @@ async function processMessage(messageData, retryCount = 0) {
   } catch (error) {
     console.error(`Message processing attempt ${retryCount + 1} failed:`, error);
 
+    // User-friendly error message that doesn't expose technical details
+    const userMessage = "We couldn't process your message. Please try again or contact an admin if the issue persists.";
+    
+    // Detailed technical message for Slack
+    const technicalMessage = `Failed to process message from ${messageData.author} (attempt ${retryCount + 1}): ${error.message}`;
+
     // Notify about the error to both platforms
     await notifyError(
       messageData.channelId,
-      `Failed to process message from ${messageData.author} (attempt ${retryCount + 1}): ${error.message}`
+      technicalMessage,
+      userMessage
     );
 
     if (retryCount < MAX_RETRIES) {
@@ -111,7 +129,8 @@ async function processMessage(messageData, retryCount = 0) {
       console.error('Max retries reached. Giving up.');
       await notifyError(
         messageData.channelId,
-        `Failed to process message from ${messageData.author} after ${MAX_RETRIES} attempts: ${error.message}`
+        `Failed to process message from ${messageData.author} after ${MAX_RETRIES} attempts: ${error.message}`,
+        "We've tried multiple times but couldn't process your message. Please contact an admin for assistance."
       );
       return false;
     }

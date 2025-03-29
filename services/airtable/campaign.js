@@ -1,12 +1,13 @@
 
 import { base } from '../../config/clients.js';
-import { sendDiscordError, sendSlackError } from '../../utils/errorHandlers.js';
+import { sendDiscordError, sendSlackError, notifyError } from '../../utils/errorHandlers.js';
 
 async function findCampaign(campaignCode, messageData) {
   try {
     if (!campaignCode) {
-      const error = 'Campaign code is required';
-      await sendSlackError(error);
+      const technicalError = 'Campaign code is required';
+      const userMessage = 'Please include a campaign code in your message.';
+      await notifyError(messageData.channelId, technicalError, userMessage);
       return null;
     }
 
@@ -16,17 +17,18 @@ async function findCampaign(campaignCode, messageData) {
     }).firstPage();
 
     if (records.length === 0) {
-      const error = `@${messageData.author}, Campaign ${campaignCode} isn't active naymore. Please Contact admins`;
-      await sendDiscordError(messageData.channelId, error);
-      await sendSlackError(error);
+      const technicalError = `Campaign ${campaignCode} not found for ${messageData.author}`;
+      const userMessage = `The campaign code "${campaignCode}" is not active. Please check the code or contact an admin for assistance.`;
+      await notifyError(messageData.channelId, technicalError, userMessage);
       return null;
     }
 
     return records[0];
   } catch (error) {
     console.error('Error finding campaign:', error);
-    await sendDiscordError(messageData.channelId, `@${messageData.author}, Campaign ${campaignCode} isn't active naymore. Please Contact admins`);
-    await sendSlackError(`Campaign search error: ${error.message}`);
+    const technicalError = `Campaign search error for ${campaignCode}: ${error.message}`;
+    const userMessage = `We couldn't find the campaign "${campaignCode}". Please check the campaign code or contact an admin for help.`;
+    await notifyError(messageData.channelId, technicalError, userMessage);
     return null;
   }
 }

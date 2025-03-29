@@ -24,23 +24,23 @@ async function findCreatorRecord(tiktokUsername, messageData) {
     }
 
     if (records.length === 0) {
-      // Use the new notifyError function to notify both platforms
+      // Use the new notifyError function with a user-friendly message
       await notifyError(
         messageData.channelId, 
-        `Creator not found: ${tiktokUsername} submitted by ${messageData.author}`
+        `Creator not found: ${tiktokUsername} submitted by ${messageData.author}`,
+        `We couldn't find the TikTok username "${tiktokUsername}" in our database. Please check the spelling or contact an admin for help.`
       );
-      await sendDiscordError(messageData.channelId, `@${messageData.author}: That tiktok username doesn't look familiar. Please Contact admins`);
       return null;
     }
 
     return records[0];
   } catch (error) {
-    // Use the new notifyError function for the comprehensive notification
+    // Use the new notifyError function with a user-friendly message
     await notifyError(
       messageData.channelId,
-      `Error finding creator ${tiktokUsername} submitted by ${messageData.author}: ${error.message}`
+      `Error finding creator ${tiktokUsername} submitted by ${messageData.author}: ${error.message}`,
+      `We encountered an issue with the TikTok username "${tiktokUsername}". Please try again or contact an admin for help.`
     );
-    await sendDiscordError(messageData.channelId, `@${messageData.author}: That tiktok username doesn't look familiar. Please Contact admins`);
     return null;
   }
 }
