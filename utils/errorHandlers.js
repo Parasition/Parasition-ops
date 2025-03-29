@@ -1,3 +1,4 @@
+
 import { client, slack } from '../config/clients.js';
 
 async function sendDiscordError(channelId, error) {
@@ -7,9 +8,19 @@ async function sendDiscordError(channelId, error) {
       return;
     }
 
+    if (!channelId) {
+      console.error('No channel ID provided for Discord error message');
+      return;
+    }
+
+    console.log(`Attempting to send error to Discord channel: ${channelId}`);
+    
     const channel = await client.channels.fetch(channelId);
     if (channel) {
       await channel.send(`❌ ${error}`);
+      console.log(`Successfully sent error message to Discord channel: ${channelId}`);
+    } else {
+      console.error(`Could not find Discord channel with ID: ${channelId}`);
     }
   } catch (err) {
     console.error('Failed to send error message to Discord:', err);
@@ -69,7 +80,10 @@ async function notifyError(channelId, technicalError, userFriendlyMessage) {
   
   if (channelId) {
     const discordMessage = userFriendlyMessage || technicalError;
-    await sendDiscordError(channelId, discordMessage);
+    console.log(`Sending to Discord channel ${channelId}: ${technicalError}`);
+    await sendDiscordError(channelId, technicalError);
+  } else {
+    console.warn('No Discord channelId provided, skipping Discord notification');
   }
   
   await sendSlackError(technicalError);
